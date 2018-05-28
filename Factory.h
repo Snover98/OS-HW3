@@ -11,12 +11,6 @@ private:
     //map of threads by id
     std::unordered_map<int, pthread_t*> threads_map;
 
-    //flag that is true when the returning service is open
-    bool is_returning_open;
-
-    //flag that is true when the factory is open
-    bool is_factory_open;
-
     //list of all available products from oldest produced to newest
     std::list<Product> available_products;
 
@@ -35,6 +29,15 @@ private:
     //counters for thread types that need them
     int thieves_counter;
     int companies_counter;
+
+    //flag that is true when the returning service is open
+    bool is_returning_open;
+
+    //flag that is true when the factory is open
+    bool is_factory_open;
+
+    //@TODO Wrapper for correct usage of pthread_create
+    void *tryBuyOneWrapper(void*);
 
 public:
     Factory();
