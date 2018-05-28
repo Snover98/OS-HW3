@@ -8,7 +8,7 @@
 class Factory{
 private:
     //map of threads by id
-    //unordered_map<int, Thread> threads_map;
+    //unordered_map<int, pthread_t*> threads_map;
 
     //flag that is true when the returning service is open
     //bool is_returning_open
