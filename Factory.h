@@ -6,6 +6,9 @@
 #include "Product.h"
 
 class Factory{
+private:
+    //unordered_map<int, Thread> threads_map;
+
 public:
     Factory();
     ~Factory();
