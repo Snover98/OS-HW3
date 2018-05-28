@@ -7,7 +7,14 @@
 
 class Factory{
 private:
+    //map of threads by id
     //unordered_map<int, Thread> threads_map;
+
+    //flag that is true when the returning service is open
+    //bool is_returning_open
+
+    //list of all available products from oldest produced to newest
+    //std::list<Product> available_products
 
 public:
     Factory();
