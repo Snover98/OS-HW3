@@ -125,6 +125,7 @@ int Factory::finishSimpleBuyer(unsigned int id){
     pthread_t* simple_thread = NULL;
 
     //try finding the thread with the inputted id
+    //@TODO maybe we should use threads_map.at(id) instead so we'll find errors easier
     simple_thread = threads_map[id];
 
     int buy_result = 0;
