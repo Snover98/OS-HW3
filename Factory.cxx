@@ -74,9 +74,7 @@ void Factory::finishProduction(unsigned int id){
 
 void Factory::startSimpleBuyer(unsigned int id){
     //if it can't take the map lock, return
-    if(pthread_mutex_trylock(&map_lock) != 0){
-        return;
-    }
+    pthread_mutex_lock(&map_lock);
 
     pthread_t* new_thread;
     new_thread = (pthread_t*)malloc(sizeof(pthread_t));
@@ -123,9 +121,7 @@ int Factory::tryBuyOne(){
 
 int Factory::finishSimpleBuyer(unsigned int id){
     //wait for the map lock
-    if(pthread_mutex_trylock(&map_lock) != 0){
-        pthread_cond_wait(&simples_map_condition, &map_lock);
-    }
+    pthread_mutex_lock(&map_lock);
 
     pthread_t* simple_thread = NULL;
 
