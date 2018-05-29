@@ -82,6 +82,8 @@ void Factory::startSimpleBuyer(unsigned int id){
     new_thread = (pthread_t*)malloc(sizeof(pthread_t));
     threads_map[id] = new_thread;
 
+    //tell the next thread that it can lock the map
+    mapFreeSignal();
     //give up the map lock
     pthread_mutex_unlock(&map_lock);
 
@@ -105,6 +107,9 @@ int Factory::tryBuyOne(){
         //buy and remove the oldest product
         bought = available_products.front();
         available_products.pop_front();
+
+        //signal the next thread that it can take the lock
+        factoryFreeSignal();
 
         //unlock the factory
         pthread_mutex_unlock(&factory_lock);
@@ -132,6 +137,8 @@ int Factory::finishSimpleBuyer(unsigned int id){
 
     //remove it from the map
     threads_map.erase(id);
+    //tell the next thread that it can lock the map
+    mapFreeSignal();
     //unlock the map
     pthread_mutex_unlock(&map_lock);
     //join the thread
