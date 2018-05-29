@@ -32,11 +32,15 @@ Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_cou
     //init mutex lock
     //@TODO maybe should not be NULL
     pthread_mutex_init(&factory_lock, NULL);
+    pthread_mutex_init(&map_lock, NULL);
 
     //init condition vars
     pthread_cond_init(&thieves_condition, NULL);
     pthread_cond_init(&production_condition, NULL);
     pthread_cond_init(&companies_condition, NULL);
+    pthread_cond_init(&thieves_map_condition, NULL);
+    pthread_cond_init(&production_map_condition, NULL);
+    pthread_cond_init(&companies_map_condition, NULL);
 }
 
 Factory::~Factory(){

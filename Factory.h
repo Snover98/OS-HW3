@@ -20,11 +20,17 @@ private:
 
     //lock for the factory
     pthread_mutex_t factory_lock;
+    pthread_mutex_t map_lock;
 
-    //condition vars for the different thread types that use condition vars
+    //condition vars for the different thread types, used by the factory lock
     pthread_cond_t thieves_condition;
     pthread_cond_t production_condition;
     pthread_cond_t companies_condition;
+
+    //condition vars for the different thread types, used by the factory lock
+    pthread_cond_t thieves_map_condition;
+    pthread_cond_t production_map_condition;
+    pthread_cond_t companies_map_condition;
 
     //counters for thread types that need them
     int thieves_counter;
