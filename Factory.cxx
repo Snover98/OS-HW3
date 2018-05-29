@@ -53,7 +53,7 @@ int Factory::tryBuyOne(){
     Product bought;
 
     lock_res = pthread_mutex_trylock(&factory_lock);
-    if(lock_res == 0 || !available_products.empty() || thieves_counter == 0 || companies_counter == 0 || is_factory_open){
+    if(lock_res == 0 && !available_products.empty() && thieves_counter == 0 && companies_counter == 0 && is_factory_open){
         //buy and remove the oldest product
         bought = available_products.front();
         available_products.pop_front();
