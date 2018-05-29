@@ -1,5 +1,33 @@
 #include "Factory.h"
 
+typedef struct{
+    Factory* factory;
+    int num_products;
+    Product* products;
+} prod_struct;
+
+typedef struct{
+    Factory* factory;
+} simple_struct;
+
+typedef struct{
+    Factory* factory;
+    int num_products;
+    int min_value;
+} company_struct;
+
+typedef struct{
+    Factory* factory;
+    int num_products;
+    unsigned int fake_id;
+} thief_struct;
+
+void *prodWrapper(void*);
+void *simpleWrapper(void*);
+void *companyWrapper(void*);
+void *thiefWrapper(void*);
+
+
 Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0){
     //init mutex lock
     //@TODO maybe should not be NULL
@@ -35,14 +63,19 @@ void Factory::finishProduction(unsigned int id){
 
 void Factory::startSimpleBuyer(unsigned int id){
     pthread_t* new_thread;
-    threads_map[(int) id] = new_thread;
+    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
+    threads_map[id] = new_thread;
 
-    pthread_create(new_thread, NULL, tryBuyOneWrapper , NULL);
+    simple_struct s = {.factory = this};
+
+    pthread_create(new_thread, NULL, simpleWrapper , &s);
 }
 
 //@TODO Wrapper for correct usage of pthread_create
-void *Factory::tryBuyOneWrapper(void*){
-    pthread_exit((void*)tryBuyOne);
+void *simpleWrapper(void* s_struct){
+    simple_struct* s;
+    s = static_cast<simple_struct*>(s_struct);
+    pthread_exit((void*)s->factory->tryBuyOne());
 }
 
 int Factory::tryBuyOne(){

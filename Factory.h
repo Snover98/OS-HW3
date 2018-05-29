@@ -9,7 +9,7 @@
 class Factory{
 private:
     //map of threads by id
-    std::unordered_map<int, pthread_t*> threads_map;
+    std::unordered_map<unsigned int, pthread_t*> threads_map;
 
     //list of all available products from oldest produced to newest
     std::list<Product> available_products;
@@ -35,9 +35,6 @@ private:
 
     //flag that is true when the factory is open
     bool is_factory_open;
-
-    //@TODO Wrapper for correct usage of pthread_create
-    void *tryBuyOneWrapper(void*);
 
 public:
     Factory();
