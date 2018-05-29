@@ -28,7 +28,8 @@ void *companyWrapper(void*);
 void *thiefWrapper(void*);
 
 
-Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0){
+Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0),
+                     waiting_thieves_counter(0), waiting_companies_counter(0){
     //init mutex lock
     //@TODO maybe should not be NULL
     pthread_mutex_init(&factory_lock, NULL);
@@ -41,6 +42,7 @@ Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_cou
     pthread_cond_init(&thieves_map_condition, NULL);
     pthread_cond_init(&production_map_condition, NULL);
     pthread_cond_init(&companies_map_condition, NULL);
+    pthread_cond_init(&simples_map_condition, NULL);
 }
 
 Factory::~Factory(){
@@ -55,6 +57,7 @@ Factory::~Factory(){
     pthread_cond_destroy(&thieves_map_condition);
     pthread_cond_destroy(&production_map_condition);
     pthread_cond_destroy(&companies_map_condition);
+    pthread_cond_destroy(&simples_map_condition);
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
@@ -70,9 +73,17 @@ void Factory::finishProduction(unsigned int id){
 }
 
 void Factory::startSimpleBuyer(unsigned int id){
+    //if it can't take the map lock, return
+    if(pthread_mutex_trylock(&map_lock) != 0){
+        return;
+    }
+
     pthread_t* new_thread;
     new_thread = (pthread_t*)malloc(sizeof(pthread_t));
     threads_map[id] = new_thread;
+
+    //give up the map lock
+    pthread_mutex_unlock(&map_lock);
 
     simple_struct s = {.factory = this};
 
@@ -87,32 +98,45 @@ void *simpleWrapper(void* s_struct){
 }
 
 int Factory::tryBuyOne(){
-    //try lock return value
-    int lock_res;
-    //value that we will return, default is -1 (failure)
-    int retval = -1;
     Product bought;
 
-    lock_res = pthread_mutex_trylock(&factory_lock);
-    if(lock_res == 0 && !available_products.empty() && thieves_counter == 0 && companies_counter == 0 && is_factory_open){
+    if(pthread_mutex_trylock(&factory_lock) == 0 && !available_products.empty() && thieves_counter == 0 &&
+            companies_counter == 0 && is_factory_open){
         //buy and remove the oldest product
         bought = available_products.front();
         available_products.pop_front();
 
-        //return value is the bought product's id
-        retval = bought.getId();
-    }
-
-    if(lock_res == 0){
+        //unlock the factory
         pthread_mutex_unlock(&factory_lock);
+
+        //return value is the bought product's id
+        return bought.getId();
     }
 
-    return retval;
+    return -1;
 }
 
 int Factory::finishSimpleBuyer(unsigned int id){
+    //wait for the map lock
+    if(pthread_mutex_trylock(&map_lock) != 0){
+        pthread_cond_wait(&simples_map_condition, &map_lock);
+    }
 
-    return -1;
+    pthread_t* simple_thread = NULL;
+
+    //try finding the thread with the inputted id
+    simple_thread = threads_map[id];
+
+    int buy_result = 0;
+
+    //remove it from the map
+    threads_map.erase(id);
+    //unlock the map
+    pthread_mutex_unlock(&map_lock);
+    //join the thread
+    pthread_join(*simple_thread, (void**)&buy_result);
+
+    return buy_result;
 }
 
 void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id){
@@ -168,4 +192,26 @@ std::list<std::pair<Product, int>> Factory::listStolenProducts(){
 
 std::list<Product> Factory::listAvailableProducts(){
     return std::list<Product>();
+}
+
+void Factory::mapFreeSignal(){
+    if(waiting_thieves_counter > 0){
+        pthread_cond_signal(&thieves_map_condition);
+    } else if(waiting_companies_counter > 0){
+        pthread_cond_signal(&companies_map_condition);
+    }
+
+    pthread_cond_signal(&production_map_condition);
+}
+
+void Factory::factoryFreeSignal(){
+    if(thieves_counter > 0){
+        pthread_cond_signal(&thieves_condition);
+    } else if(companies_counter > 0){
+        pthread_cond_broadcast(&companies_condition);
+    } else {
+        pthread_cond_signal(&simples_map_condition);
+    }
+
+    pthread_cond_signal(&production_condition);
 }

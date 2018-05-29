@@ -31,16 +31,24 @@ private:
     pthread_cond_t thieves_map_condition;
     pthread_cond_t production_map_condition;
     pthread_cond_t companies_map_condition;
+    pthread_cond_t simples_map_condition;
 
     //counters for thread types that need them
     int thieves_counter;
     int companies_counter;
+    int waiting_thieves_counter;
+    int waiting_companies_counter;
 
     //flag that is true when the returning service is open
     bool is_returning_open;
 
     //flag that is true when the factory is open
     bool is_factory_open;
+
+    //calls the correct condition vars when map is free
+    void mapFreeSignal();
+    //calls the correct condition vars when factory is free
+    void factoryFreeSignal();
 
 public:
     Factory();
