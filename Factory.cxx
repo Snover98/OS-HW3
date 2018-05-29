@@ -46,11 +46,15 @@ Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_cou
 Factory::~Factory(){
     //destroy mutex lock
     pthread_mutex_destroy(&factory_lock);
+    pthread_mutex_destroy(&map_lock);
 
     //destroy condition vars
     pthread_cond_destroy(&thieves_condition);
     pthread_cond_destroy(&production_condition);
     pthread_cond_destroy(&companies_condition);
+    pthread_cond_destroy(&thieves_map_condition);
+    pthread_cond_destroy(&production_map_condition);
+    pthread_cond_destroy(&companies_map_condition);
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
