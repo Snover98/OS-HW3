@@ -200,16 +200,59 @@ void *companyWrapper(void* s_struct){
 }
 
 std::list<Product> Factory::buyProducts(int num_products){
+    //lock the factory
+    pthread_mutex_lock(&factory_lock);
+    //wait until there are enough products and no thieves are around
+    while(available_products.size() < num_products || thieves_counter > 0){
+        pthread_cond_wait(&companies_condition, &factory_lock);
+    }
 
-    return std::list<Product>();
+    //take the num_products oldest products
+    std::list<Product> bought_products = takeOldestProducts(num_products);
+
+    //signal that the factory is unlocked
+    factoryFreeSignal();
+
+    //unlock the factory
+    pthread_mutex_unlock(&factory_lock);
+
+    return bought_products;
 }
 
 void Factory::returnProducts(std::list<Product> products,unsigned int id){
+    //lock the factory
+    pthread_mutex_lock(&factory_lock);
+    //wait until no thieves are around
+    while(thieves_counter > 0){
+        pthread_cond_wait(&companies_condition, &factory_lock);
+    }
 
+    //return the products
+    available_products.splice(available_products.end(), products);
+
+    //signal that the factory is unlocked
+    factoryFreeSignal();
+
+    //unlock the factory
+    pthread_mutex_unlock(&factory_lock);
 }
 
 int Factory::finishCompanyBuyer(unsigned int id){
-    return 0;
+    //save the thread
+    pthread_t simple_thread = threads_map[id];
+
+    int num_returned = 0;
+
+    //remove it from the map
+    threads_map.erase(id);
+
+    //decrease counter by 1
+    companies_counter--;
+
+    //join the thread
+    pthread_join(simple_thread, (void**)&num_returned);
+
+    return num_returned;
 }
 
 void Factory::startThief(int num_products,unsigned int fake_id){
@@ -264,4 +307,21 @@ void Factory::factoryFreeSignal(){
     if(thieves_counter == 0){
         pthread_cond_broadcast(&companies_condition);
     }
+}
+
+std::list<Product> Factory::takeOldestProducts(int num_products){
+    if(num_products == 0){
+        return std::list<Product>();
+    }
+
+    std::list<Product> new_list;
+
+    //create an iterator pointing to the last product we want to take
+    auto last_to_take = available_products.begin();
+    std::advance(last_to_take, num_products-1);
+
+    //take all of the elements from the beginning of available_products to the num_products element
+    new_list.splice(new_list.begin(), available_products, available_products.begin(), last_to_take);
+
+    return new_list;
 }

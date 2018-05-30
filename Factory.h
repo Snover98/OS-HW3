@@ -49,6 +49,8 @@ private:
 //    void mapFreeSignal();
     //calls the correct condition vars when factory is free
     void factoryFreeSignal();
+    //takes the num_products oldest products from available_products and returns them as a list (same order)
+    std::list<Product> takeOldestProducts(int num_products);
 
 public:
     Factory();
