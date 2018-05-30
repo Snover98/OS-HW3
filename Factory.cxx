@@ -13,6 +13,13 @@ void *simpleWrapper(void* s_struct);
 void *companyWrapper(void* s_struct);
 void *thiefWrapper(void* s_struct);
 
+class isAboveMinValueFunctor{
+    int min_value;
+public:
+    isAboveMinValueFunctor(int min_value) : min_value(min_value){}
+    bool isAboveMinValue(Product& prod) { return (prod.getValue() >= min_value); }
+};
+
 
 Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0){
     //init mutex lock
@@ -54,7 +61,6 @@ void Factory::startProduction(int num_products, Product* products,unsigned int i
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, prodWrapper , &s);
-
 }
 
 void *prodWrapper(void* s_struct){
@@ -159,7 +165,38 @@ int Factory::finishSimpleBuyer(unsigned int id){
 }
 
 void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id){
+    //make new thread in the map
+    pthread_t &new_thread = threads_map[id];
 
+    //make wrapper struct
+    wrapper_struct s = {.factory = this, .min_value = min_value, .num_products = num_products};
+
+    //update companies counter
+    companies_counter++;
+
+    //create new thread using wrapper functions
+    pthread_create(&new_thread, NULL, companyWrapper , &s);
+
+}
+
+void *companyWrapper(void* s_struct){
+    int num_returned;
+    wrapper_struct* s;
+    s = static_cast<wrapper_struct*>(s_struct);
+
+    //buy products
+    std::list<Product> bought_products = s->factory->buyProducts(s->num_products);
+
+    //remove all products that should not be returned from the list
+    isAboveMinValueFunctor pred = isAboveMinValueFunctor(s->min_value);
+    bought_products.remove_if(pred.isAboveMinValue);
+    //save the number of products we will return, that will be our return value
+    num_returned = static_cast<int>(bought_products.size());
+
+    //return the products (id parameter is deprecated and can be passed any value)
+    s->factory->returnProducts(bought_products, 0);
+
+    pthread_exit((void*)num_returned);
 }
 
 std::list<Product> Factory::buyProducts(int num_products){
