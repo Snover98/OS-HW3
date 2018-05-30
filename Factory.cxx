@@ -14,7 +14,7 @@ void *companyWrapper(void* s_struct);
 void *thiefWrapper(void* s_struct);
 
 
-Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0), {
+Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0){
     //init mutex lock
     //@TODO maybe should not be NULL
     pthread_mutex_init(&factory_lock, NULL);
@@ -46,16 +46,13 @@ Factory::~Factory(){
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
+    //make new thread in the map
     pthread_t &new_thread = threads_map[id];
-//    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
 
-    //tell the next thread that it can lock the map
-//    mapFreeSignal();
-    //give up the map lock
-//    pthread_mutex_unlock(&map_lock);
-
+    //make wrapper struct
     wrapper_struct s = {.factory = this, .products = products, .num_products = num_products};
 
+    //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, prodWrapper , &s);
 
 }
@@ -84,6 +81,7 @@ void Factory::produce(int num_products, Product* products){
 }
 
 void Factory::finishProduction(unsigned int id){
+    //save thread id
     pthread_t prod_thread = threads_map[id];
 
     //remove it from the map
