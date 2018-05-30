@@ -8,10 +8,10 @@ typedef struct{
     unsigned int fake_id;
 } wrapper_struct;
 
-void *prodWrapper(void*);
-void *simpleWrapper(void*);
-void *companyWrapper(void*);
-void *thiefWrapper(void*);
+void *prodWrapper(void* s_struct);
+void *simpleWrapper(void* s_struct);
+void *companyWrapper(void* s_struct);
+void *thiefWrapper(void* s_struct);
 
 
 Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0), {
@@ -46,11 +46,42 @@ Factory::~Factory(){
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
+    pthread_t new_thread;
+//    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
+    threads_map[id] = new_thread;
+
+    //tell the next thread that it can lock the map
+//    mapFreeSignal();
+    //give up the map lock
+//    pthread_mutex_unlock(&map_lock);
+
+    wrapper_struct s = {.factory = this, .products = products, .num_products = num_products};
+
+    pthread_create(&threads_map[id], NULL, prodWrapper , &s);
 
 }
 
-void Factory::produce(int num_products, Product* products){
+void *prodWrapper(void* s_struct){
+    wrapper_struct* s;
+    s = static_cast<wrapper_struct*>(s_struct);
+    s->factory->produce(s->num_products, s->products);
+    pthread_exit(NULL);
+}
 
+void Factory::produce(int num_products, Product* products){
+    //lock factory
+    pthread_mutex_lock(&factory_lock);
+
+    //add all products to factory
+    for(int i=0; i<num_products; i++){
+        available_products.push_back(products[i]);
+    }
+
+    //signal the next thread that it can take the lock
+    factoryFreeSignal();
+
+    //unlock factory
+    pthread_mutex_unlock(&factory_lock);
 }
 
 void Factory::finishProduction(unsigned int id){
@@ -72,7 +103,7 @@ void Factory::startSimpleBuyer(unsigned int id){
 
     wrapper_struct s = {.factory = this};
 
-    pthread_create(&new_thread, NULL, simpleWrapper , &s);
+    pthread_create(&threads_map[id], NULL, simpleWrapper , &s);
 }
 
 //@TODO Wrapper for correct usage of pthread_create
@@ -91,11 +122,11 @@ int Factory::tryBuyOne(){
         bought = available_products.front();
         available_products.pop_front();
 
-        //unlock the factory
-        pthread_mutex_unlock(&factory_lock);
-
         //signal the next thread that it can take the lock
         factoryFreeSignal();
+
+        //unlock the factory
+        pthread_mutex_unlock(&factory_lock);
 
         //return value is the bought product's id
         return bought.getId();
