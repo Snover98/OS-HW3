@@ -4,23 +4,9 @@ typedef struct{
     Factory* factory;
     int num_products;
     Product* products;
-} prod_struct;
-
-typedef struct{
-    Factory* factory;
-} simple_struct;
-
-typedef struct{
-    Factory* factory;
-    int num_products;
     int min_value;
-} company_struct;
-
-typedef struct{
-    Factory* factory;
-    int num_products;
     unsigned int fake_id;
-} thief_struct;
+} wrapper_struct;
 
 void *prodWrapper(void*);
 void *simpleWrapper(void*);
@@ -28,12 +14,11 @@ void *companyWrapper(void*);
 void *thiefWrapper(void*);
 
 
-Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0),
-                     waiting_thieves_counter(0), waiting_companies_counter(0){
+Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0), {
     //init mutex lock
     //@TODO maybe should not be NULL
     pthread_mutex_init(&factory_lock, NULL);
-    pthread_mutex_init(&map_lock, NULL);
+    pthread_mutex_init(&stolen_lock, NULL);
 
     //init condition vars
     pthread_cond_init(&thieves_condition, NULL);
@@ -48,7 +33,7 @@ Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_cou
 Factory::~Factory(){
     //destroy mutex lock
     pthread_mutex_destroy(&factory_lock);
-    pthread_mutex_destroy(&map_lock);
+    pthread_mutex_destroy(&stolen_lock);
 
     //destroy condition vars
     pthread_cond_destroy(&thieves_condition);
@@ -74,26 +59,26 @@ void Factory::finishProduction(unsigned int id){
 
 void Factory::startSimpleBuyer(unsigned int id){
     //if it can't take the map lock, return
-    pthread_mutex_lock(&map_lock);
+//    pthread_mutex_lock(&map_lock);
 
-    pthread_t* new_thread;
-    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
+    pthread_t new_thread;
+//    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
     threads_map[id] = new_thread;
 
     //tell the next thread that it can lock the map
-    mapFreeSignal();
+//    mapFreeSignal();
     //give up the map lock
-    pthread_mutex_unlock(&map_lock);
+//    pthread_mutex_unlock(&map_lock);
 
-    simple_struct s = {.factory = this};
+    wrapper_struct s = {.factory = this};
 
-    pthread_create(new_thread, NULL, simpleWrapper , &s);
+    pthread_create(&new_thread, NULL, simpleWrapper , &s);
 }
 
 //@TODO Wrapper for correct usage of pthread_create
 void *simpleWrapper(void* s_struct){
-    simple_struct* s;
-    s = static_cast<simple_struct*>(s_struct);
+    wrapper_struct* s;
+    s = static_cast<wrapper_struct*>(s_struct);
     pthread_exit((void*)s->factory->tryBuyOne());
 }
 
@@ -106,11 +91,11 @@ int Factory::tryBuyOne(){
         bought = available_products.front();
         available_products.pop_front();
 
-        //signal the next thread that it can take the lock
-        factoryFreeSignal();
-
         //unlock the factory
         pthread_mutex_unlock(&factory_lock);
+
+        //signal the next thread that it can take the lock
+        factoryFreeSignal();
 
         //return value is the bought product's id
         return bought.getId();
@@ -121,24 +106,21 @@ int Factory::tryBuyOne(){
 
 int Factory::finishSimpleBuyer(unsigned int id){
     //wait for the map lock
-    pthread_mutex_lock(&map_lock);
+//    pthread_mutex_lock(&map_lock);
 
-    pthread_t* simple_thread = NULL;
-
-    //try finding the thread with the inputted id
     //@TODO maybe we should use threads_map.at(id) instead so we'll find errors easier
-    simple_thread = threads_map[id];
+    pthread_t simple_thread = threads_map[id];
 
     int buy_result = 0;
 
     //remove it from the map
     threads_map.erase(id);
     //tell the next thread that it can lock the map
-    mapFreeSignal();
+//    mapFreeSignal();
     //unlock the map
-    pthread_mutex_unlock(&map_lock);
+//    pthread_mutex_unlock(&map_lock);
     //join the thread
-    pthread_join(*simple_thread, (void**)&buy_result);
+    pthread_join(simple_thread, (void**)&buy_result);
 
     return buy_result;
 }
@@ -198,24 +180,18 @@ std::list<Product> Factory::listAvailableProducts(){
     return std::list<Product>();
 }
 
-void Factory::mapFreeSignal(){
-    if(waiting_thieves_counter > 0){
-        pthread_cond_signal(&thieves_map_condition);
-    } else if(waiting_companies_counter > 0){
-        pthread_cond_signal(&companies_map_condition);
-    }
-
-    pthread_cond_signal(&production_map_condition);
-}
+//void Factory::mapFreeSignal(){
+//    if(waiting_thieves_counter > 0){
+//        pthread_cond_signal(&thieves_map_condition);
+//    } else if(waiting_companies_counter > 0){
+//        pthread_cond_signal(&companies_map_condition);
+//    }
+//
+//    pthread_cond_signal(&production_map_condition);
+//}
 
 void Factory::factoryFreeSignal(){
-    if(thieves_counter > 0){
-        pthread_cond_signal(&thieves_condition);
-    } else if(companies_counter > 0){
+    if(thieves_counter == 0){
         pthread_cond_broadcast(&companies_condition);
-    } else {
-        pthread_cond_signal(&simples_map_condition);
     }
-
-    pthread_cond_signal(&production_condition);
 }
