@@ -46,9 +46,8 @@ Factory::~Factory(){
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
-    pthread_t new_thread;
+    pthread_t &new_thread = threads_map[id];
 //    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
-    threads_map[id] = new_thread;
 
     //tell the next thread that it can lock the map
 //    mapFreeSignal();
@@ -57,7 +56,7 @@ void Factory::startProduction(int num_products, Product* products,unsigned int i
 
     wrapper_struct s = {.factory = this, .products = products, .num_products = num_products};
 
-    pthread_create(&threads_map[id], NULL, prodWrapper , &s);
+    pthread_create(&new_thread, NULL, prodWrapper , &s);
 
 }
 
@@ -92,9 +91,8 @@ void Factory::startSimpleBuyer(unsigned int id){
     //if it can't take the map lock, return
 //    pthread_mutex_lock(&map_lock);
 
-    pthread_t new_thread;
+    pthread_t &new_thread = threads_map[id];
 //    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
-    threads_map[id] = new_thread;
 
     //tell the next thread that it can lock the map
 //    mapFreeSignal();
@@ -103,7 +101,7 @@ void Factory::startSimpleBuyer(unsigned int id){
 
     wrapper_struct s = {.factory = this};
 
-    pthread_create(&threads_map[id], NULL, simpleWrapper , &s);
+    pthread_create(&new_thread, NULL, simpleWrapper , &s);
 }
 
 //@TODO Wrapper for correct usage of pthread_create
