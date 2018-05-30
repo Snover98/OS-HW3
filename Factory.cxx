@@ -28,8 +28,8 @@ Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_cou
     pthread_mutex_init(&stolen_lock, NULL);
 
     //init condition vars
-    pthread_cond_init(&thieves_condition, NULL);
-    pthread_cond_init(&production_condition, NULL);
+    pthread_cond_init(&returning_open_condition, NULL);
+    pthread_cond_init(&factory_open_condition, NULL);
     pthread_cond_init(&companies_condition, NULL);
     pthread_cond_init(&thieves_map_condition, NULL);
     pthread_cond_init(&production_map_condition, NULL);
@@ -43,8 +43,8 @@ Factory::~Factory(){
     pthread_mutex_destroy(&stolen_lock);
 
     //destroy condition vars
-    pthread_cond_destroy(&thieves_condition);
-    pthread_cond_destroy(&production_condition);
+    pthread_cond_destroy(&returning_open_condition);
+    pthread_cond_destroy(&factory_open_condition);
     pthread_cond_destroy(&companies_condition);
     pthread_cond_destroy(&thieves_map_condition);
     pthread_cond_destroy(&production_map_condition);
@@ -176,7 +176,6 @@ void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id)
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, companyWrapper , &s);
-
 }
 
 void *companyWrapper(void* s_struct){
@@ -203,7 +202,7 @@ std::list<Product> Factory::buyProducts(int num_products){
     //lock the factory
     pthread_mutex_lock(&factory_lock);
     //wait until there are enough products and no thieves are around
-    while(available_products.size() < num_products || thieves_counter > 0){
+    while(available_products.size() < num_products || thieves_counter > 0 || !is_factory_open){
         pthread_cond_wait(&companies_condition, &factory_lock);
     }
 
@@ -223,8 +222,9 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
     //lock the factory
     pthread_mutex_lock(&factory_lock);
     //wait until no thieves are around
-    while(thieves_counter > 0){
-        pthread_cond_wait(&companies_condition, &factory_lock);
+    while(thieves_counter > 0 || !is_returning_open){
+        pthread_cond_t current_condition = is_returning_open ? returning_open_condition : companies_condition;
+        pthread_cond_wait(&current_condition, &factory_lock);
     }
 
     //return the products
@@ -239,7 +239,7 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
 
 int Factory::finishCompanyBuyer(unsigned int id){
     //save the thread
-    pthread_t simple_thread = threads_map[id];
+    pthread_t company_thread = threads_map[id];
 
     int num_returned = 0;
 
@@ -250,47 +250,127 @@ int Factory::finishCompanyBuyer(unsigned int id){
     companies_counter--;
 
     //join the thread
-    pthread_join(simple_thread, (void**)&num_returned);
+    pthread_join(company_thread, (void**)&num_returned);
 
     return num_returned;
 }
 
 void Factory::startThief(int num_products,unsigned int fake_id){
+    //make new thread in the map
+    pthread_t &new_thread = threads_map[fake_id];
 
+    //make wrapper struct
+    wrapper_struct s = {.factory = this, .fake_id = fake_id, .num_products = num_products};
+
+    //update companies counter
+    thieves_counter++;
+
+    //create new thread using wrapper functions
+    pthread_create(&new_thread, NULL, thiefWrapper , &s);
+}
+
+void *thiefWrapper(void* s_struct){
+    wrapper_struct* s;
+    s = static_cast<wrapper_struct*>(s_struct);
+    //return the theft value
+    pthread_exit((void*)s->factory->stealProducts(s->num_products, s->fake_id));
 }
 
 int Factory::stealProducts(int num_products,unsigned int fake_id){
+    //lock factory
+    pthread_mutex_lock(&factory_lock);
+    while(!is_factory_open){
+        pthread_cond_wait(&factory_open_condition, &factory_lock);
+    }
 
-    return 0;
+    //calculate how many products will be stolen
+    int num_stolen = std::min(num_products, static_cast<int>(available_products.size()));
+    //steal the products
+    std::list<Product> stolen = takeOldestProducts(num_stolen);
+
+    //signal the next thread that it can take the lock
+    factoryFreeSignal();
+    //free the factory lock
+    pthread_mutex_unlock(&factory_lock);
+
+    //take the reported thefts' lock
+    pthread_mutex_lock(&stolen_lock);
+
+    //report the thefts
+    for (auto& product : stolen){
+        thefts.emplace_back(product, static_cast<int>(fake_id));
+    }
+
+    //unlock reported thefts' lock
+    pthread_mutex_unlock(&stolen_lock);
+
+    return num_stolen;
 }
 
 int Factory::finishThief(unsigned int fake_id){
+    //save the thread
+    pthread_t thief_thread = threads_map[fake_id];
 
-    return 0;
+    int num_stolen = 0;
+
+    //remove it from the map
+    threads_map.erase(fake_id);
+
+    //decrease counter by 1
+    thieves_counter--;
+
+    //join the thread
+    pthread_join(thief_thread, (void**)&num_stolen);
+
+    return num_stolen;
+
 }
 
 void Factory::closeFactory(){
-
+    is_factory_open = false;
 }
 
 void Factory::openFactory(){
-
+    is_factory_open = true;
+    pthread_cond_broadcast(&factory_open_condition);
+    factoryFreeSignal();
 }
 
 void Factory::closeReturningService(){
-
+    is_returning_open = false;
 }
 
 void Factory::openReturningService(){
-
+    is_returning_open = true;
+    pthread_cond_broadcast(&returning_open_condition);
 }
 
 std::list<std::pair<Product, int>> Factory::listStolenProducts(){
-    return std::list<std::pair<Product, int>>();
+    //take the reported thefts' lock
+    pthread_mutex_lock(&stolen_lock);
+
+    //copy the thefts' list
+    std::list<std::pair<Product, int>> thefts_copy = thefts;
+
+    //unlock the reported thefts' lock
+    pthread_mutex_unlock(&stolen_lock);
+
+    //return the copy
+    return thefts_copy;
 }
 
 std::list<Product> Factory::listAvailableProducts(){
-    return std::list<Product>();
+    //lock the factory lock
+    pthread_mutex_lock(&factory_lock);
+
+    //copy the available products list
+    std::list<Product> available_products_copy = available_products;
+
+    //unlock the reported thefts' lock
+    pthread_mutex_unlock(&factory_lock);
+
+    //return the copy
+    return available_products_copy;
 }
 
 //void Factory::mapFreeSignal(){

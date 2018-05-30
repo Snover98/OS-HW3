@@ -23,8 +23,8 @@ private:
     pthread_mutex_t stolen_lock;
 
     //condition vars for the different thread types, used by the factory lock
-//    pthread_cond_t thieves_condition;
-//    pthread_cond_t production_condition;
+    pthread_cond_t returning_open_condition;
+    pthread_cond_t factory_open_condition;
     pthread_cond_t companies_condition;
 
     //condition vars for the different thread types, used by the factory lock
