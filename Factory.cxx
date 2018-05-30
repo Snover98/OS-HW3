@@ -84,7 +84,13 @@ void Factory::produce(int num_products, Product* products){
 }
 
 void Factory::finishProduction(unsigned int id){
+    pthread_t prod_thread = threads_map[id];
 
+    //remove it from the map
+    threads_map.erase(id);
+
+    //join the thread
+    pthread_join(prod_thread, NULL);
 }
 
 void Factory::startSimpleBuyer(unsigned int id){
