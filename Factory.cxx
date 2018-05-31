@@ -323,7 +323,6 @@ int Factory::finishThief(unsigned int fake_id){
     pthread_join(thief_thread, (void**)&num_stolen);
 
     return num_stolen;
-
 }
 
 void Factory::closeFactory(){
