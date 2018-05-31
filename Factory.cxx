@@ -53,14 +53,18 @@ Factory::~Factory(){
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
-    //make new thread in the map
-    pthread_t &new_thread = threads_map[id];
+    if(num_products <= 0) return;
+
+    pthread_t new_thread;
 
     //make wrapper struct
     wrapper_struct s = {.factory = this, .products = products, .num_products = num_products};
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, prodWrapper , &s);
+
+    //insert the new thread to the map;
+    threads_map[id] = new_thread;
 }
 
 void *prodWrapper(void* s_struct){
@@ -79,14 +83,16 @@ void Factory::produce(int num_products, Product* products){
         available_products.push_back(products[i]);
     }
 
-    //signal the next thread that it can take the lock
-    factoryFreeSignal();
-
     //unlock factory
     pthread_mutex_unlock(&factory_lock);
+
+    //signal the next thread that it can take the lock
+    factoryFreeSignal();
 }
 
 void Factory::finishProduction(unsigned int id){
+    //TODO: dont we need to lock the mutex before ending the prod_thread? maybe the same thread is still producing
+
     //save thread id
     pthread_t prod_thread = threads_map[id];
 
@@ -98,20 +104,15 @@ void Factory::finishProduction(unsigned int id){
 }
 
 void Factory::startSimpleBuyer(unsigned int id){
-    //if it can't take the map lock, return
-//    pthread_mutex_lock(&map_lock);
-
-    pthread_t &new_thread = threads_map[id];
-//    new_thread = (pthread_t*)malloc(sizeof(pthread_t));
-
-    //tell the next thread that it can lock the map
-//    mapFreeSignal();
-    //give up the map lock
-//    pthread_mutex_unlock(&map_lock);
+    pthread_t simple_thread;
 
     wrapper_struct s = {.factory = this};
 
-    pthread_create(&new_thread, NULL, simpleWrapper , &s);
+    pthread_create(&simple_thread, NULL, simpleWrapper , &s);
+
+    threads_map[id] = simple_thread;
+
+    finishSimpleBuyer(id);
 }
 
 //@TODO Wrapper for correct usage of pthread_create
@@ -123,42 +124,42 @@ void *simpleWrapper(void* s_struct){
 
 int Factory::tryBuyOne(){
     Product bought;
+    int isLocked = pthread_mutex_trylock(&factory_lock) == 0 ? 1 : 0;
+    int isBought=0;
 
-    if(pthread_mutex_trylock(&factory_lock) == 0 && !available_products.empty() && thieves_counter == 0 &&
-            companies_counter == 0 && is_factory_open){
-        //buy and remove the oldest product
-        bought = available_products.front();
-        available_products.pop_front();
-
-        //signal the next thread that it can take the lock
-        factoryFreeSignal();
+    if(isLocked){
+        if(!available_products.empty() && thieves_counter == 0 &&
+               companies_counter == 0 && is_factory_open) {
+            //buy and remove the oldest product
+            bought = available_products.front();
+            available_products.pop_front();
+            isBought = 1;
+        }
 
         //unlock the factory
         pthread_mutex_unlock(&factory_lock);
 
+        //signal the next thread that it can take the lock
+        factoryFreeSignal();
+
         //return value is the bought product's id
-        return bought.getId();
+        if(isBought) {
+            return bought.getId();
+        }
     }
 
     return -1;
 }
 
 int Factory::finishSimpleBuyer(unsigned int id){
-    //wait for the map lock
-//    pthread_mutex_lock(&map_lock);
-
     //@TODO maybe we should use threads_map.at(id) instead so we'll find errors easier
     pthread_t simple_thread = threads_map[id];
 
-    int buy_result = 0;
+    int buy_result;
 
     //remove it from the map
     threads_map.erase(id);
-    //tell the next thread that it can lock the map
-//    mapFreeSignal();
-    //unlock the map
-//    pthread_mutex_unlock(&map_lock);
-    //join the thread
+
     pthread_join(simple_thread, (void**)&buy_result);
 
     return buy_result;
