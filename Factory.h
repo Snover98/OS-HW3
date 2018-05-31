@@ -21,6 +21,8 @@ private:
     //lock for the factory
     pthread_mutex_t factory_lock;
     pthread_mutex_t stolen_lock;
+    pthread_mutex_t companies_counter_lock;
+    pthread_mutex_t thieves_counter_lock;
 
     //condition vars for the different thread types, used by the factory lock
     pthread_cond_t returning_open_condition;
@@ -67,6 +69,7 @@ public:
     void startCompanyBuyer(int num_products, int min_value,unsigned int id);
     std::list<Product> buyProducts(int num_products);
     void returnProducts(std::list<Product> products,unsigned int id);
+    void incCompanyCounter();
     int finishCompanyBuyer(unsigned int id);
 
     void startThief(int num_products,unsigned int fake_id);

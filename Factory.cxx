@@ -26,6 +26,8 @@ Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_cou
     //@TODO maybe should not be NULL
     pthread_mutex_init(&factory_lock, NULL);
     pthread_mutex_init(&stolen_lock, NULL);
+    pthread_mutex_init(&companies_counter_lock, NULL);
+    pthread_mutex_init(&thieves_counter_lock, NULL);
 
     //init condition vars
     pthread_cond_init(&returning_open_condition, NULL);
@@ -41,6 +43,8 @@ Factory::~Factory(){
     //destroy mutex lock
     pthread_mutex_destroy(&factory_lock);
     pthread_mutex_destroy(&stolen_lock);
+    pthread_mutex_destroy(&companies_counter_lock);
+    pthread_mutex_destroy(&thieves_counter_lock);
 
     //destroy condition vars
     pthread_cond_destroy(&returning_open_condition);
@@ -83,11 +87,11 @@ void Factory::produce(int num_products, Product* products){
         available_products.push_back(products[i]);
     }
 
-    //unlock factory
-    pthread_mutex_unlock(&factory_lock);
-
     //signal the next thread that it can take the lock
     factoryFreeSignal();
+
+    //unlock factory
+    pthread_mutex_unlock(&factory_lock);
 }
 
 void Factory::finishProduction(unsigned int id){
@@ -136,11 +140,11 @@ int Factory::tryBuyOne(){
             isBought = 1;
         }
 
-        //unlock the factory
-        pthread_mutex_unlock(&factory_lock);
-
         //signal the next thread that it can take the lock
         factoryFreeSignal();
+
+        //unlock the factory
+        pthread_mutex_unlock(&factory_lock);
 
         //return value is the bought product's id
         if(isBought) {
@@ -166,23 +170,29 @@ int Factory::finishSimpleBuyer(unsigned int id){
 }
 
 void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id){
-    //make new thread in the map
-    pthread_t &new_thread = threads_map[id];
+    pthread_t new_thread;
 
     //make wrapper struct
     wrapper_struct s = {.factory = this, .min_value = min_value, .num_products = num_products};
 
-    //update companies counter
-    companies_counter++;
+    threads_map[id] = new_thread;
+
+    pthread_mutex_lock(&companies_counter_lock);
+    ++companies_counter;
+    pthread_mutex_unlock(&companies_counter_lock);
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, companyWrapper , &s);
 }
 
+void Factory::incCompanyCounter() { ++companies_counter; }
+
 void *companyWrapper(void* s_struct){
     int num_returned;
     wrapper_struct* s;
     s = static_cast<wrapper_struct*>(s_struct);
+
+//    s->factory->incCompanyCounter();
 
     //buy products
     std::list<Product> bought_products = s->factory->buyProducts(s->num_products);
@@ -207,11 +217,14 @@ std::list<Product> Factory::buyProducts(int num_products){
         pthread_cond_wait(&companies_condition, &factory_lock);
     }
 
+    //TODO: dont we need a lock here?
+    ++companies_counter;
+
     //take the num_products oldest products
     std::list<Product> bought_products = takeOldestProducts(num_products);
 
     //signal that the factory is unlocked
-    factoryFreeSignal();
+//    factoryFreeSignal();
 
     //unlock the factory
     pthread_mutex_unlock(&factory_lock);
@@ -224,12 +237,27 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
     pthread_mutex_lock(&factory_lock);
     //wait until no thieves are around
     while(thieves_counter > 0 || !is_returning_open){
-        pthread_cond_t current_condition = is_returning_open ? returning_open_condition : companies_condition;
+        pthread_cond_t current_condition = !is_returning_open ? returning_open_condition : companies_condition;
+
+        //here we enable a simple buyer to take the lock if the returning service is closed
+        if(&current_condition == &returning_open_condition) {
+            //TODO: dont we need a lock here?
+            --companies_counter;
+        }
         pthread_cond_wait(&current_condition, &factory_lock);
+
+        if(&current_condition == &returning_open_condition) {
+            //TODO: dont we need a lock here?
+            ++companies_counter;
+        }
     }
 
     //return the products
     available_products.splice(available_products.end(), products);
+
+    pthread_mutex_lock(&companies_counter_lock);
+    --companies_counter;
+    pthread_mutex_unlock(&companies_counter_lock);
 
     //signal that the factory is unlocked
     factoryFreeSignal();
@@ -247,6 +275,7 @@ int Factory::finishCompanyBuyer(unsigned int id){
     //remove it from the map
     threads_map.erase(id);
 
+    //TODO: dont we need a lock here?
     //decrease counter by 1
     companies_counter--;
 
@@ -264,7 +293,9 @@ void Factory::startThief(int num_products,unsigned int fake_id){
     wrapper_struct s = {.factory = this, .fake_id = fake_id, .num_products = num_products};
 
     //update companies counter
-    thieves_counter++;
+    pthread_mutex_lock(&thieves_counter_lock);
+    ++thieves_counter;
+    pthread_mutex_unlock(&thieves_counter_lock);
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, thiefWrapper , &s);
@@ -280,22 +311,31 @@ void *thiefWrapper(void* s_struct){
 int Factory::stealProducts(int num_products,unsigned int fake_id){
     //lock factory
     pthread_mutex_lock(&factory_lock);
-    while(!is_factory_open){
+
+    //take the reported thefts' lock
+    pthread_mutex_lock(&stolen_lock);
+
+    if(!is_factory_open){
+        pthread_mutex_unlock(&stolen_lock);
         pthread_cond_wait(&factory_open_condition, &factory_lock);
+        pthread_mutex_lock(&stolen_lock);
     }
+
 
     //calculate how many products will be stolen
     int num_stolen = std::min(num_products, static_cast<int>(available_products.size()));
     //steal the products
     std::list<Product> stolen = takeOldestProducts(num_stolen);
 
+    pthread_mutex_lock(&thieves_counter_lock);
+    --thieves_counter;
+    pthread_mutex_unlock(&thieves_counter_lock);
+
     //signal the next thread that it can take the lock
     factoryFreeSignal();
+
     //free the factory lock
     pthread_mutex_unlock(&factory_lock);
-
-    //take the reported thefts' lock
-    pthread_mutex_lock(&stolen_lock);
 
     //report the thefts
     for (auto& product : stolen){
@@ -316,9 +356,6 @@ int Factory::finishThief(unsigned int fake_id){
 
     //remove it from the map
     threads_map.erase(fake_id);
-
-    //decrease counter by 1
-    thieves_counter--;
 
     //join the thread
     pthread_join(thief_thread, (void**)&num_stolen);
