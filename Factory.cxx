@@ -21,12 +21,13 @@ public:
 };
 
 
-Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), companies_counter(0){
+Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0){
     //init mutex lock
     //@TODO maybe should not be NULL
     pthread_mutex_init(&factory_lock, NULL);
     pthread_mutex_init(&stolen_lock, NULL);
     pthread_mutex_init(&thieves_counter_lock, NULL);
+    pthread_mutex_init(&returning_service_lock, NULL);
 
     //init condition vars
     pthread_cond_init(&returning_open_condition, NULL);
@@ -39,6 +40,7 @@ Factory::~Factory(){
     pthread_mutex_destroy(&factory_lock);
     pthread_mutex_destroy(&stolen_lock);
     pthread_mutex_destroy(&thieves_counter_lock);
+    pthread_mutex_destroy(&returning_service_lock);
 
     //destroy condition vars
     pthread_cond_destroy(&returning_open_condition);
@@ -81,8 +83,6 @@ void Factory::produce(int num_products, Product* products){
 }
 
 void Factory::finishProduction(unsigned int id){
-    //TODO: dont we need to lock the mutex before ending the prod_thread? maybe the same thread is still producing
-
     //save thread id
     pthread_t prod_thread = threads_map[id];
 
@@ -222,13 +222,20 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
         return;
     }
 
+    //lock the returning service
+    pthread_mutex_lock(&returning_service_lock);
+    //if the returning service is closed, wait until it opens
+    if(!is_returning_open){
+        pthread_cond_wait(&returning_open_condition, &returning_service_lock);
+    }
+    //unlock the returning service
+    pthread_mutex_unlock(&returning_service_lock);
+
     //lock the factory
     pthread_mutex_lock(&factory_lock);
     //wait until no thieves are around
-    while(thieves_counter > 0 || !is_returning_open){
-        pthread_cond_t current_condition = !is_returning_open ? returning_open_condition : companies_condition;
-
-        pthread_cond_wait(&current_condition, &factory_lock);
+    while(thieves_counter > 0){
+        pthread_cond_wait(&companies_condition, &factory_lock);
     }
 
     //return the products
@@ -356,22 +363,30 @@ int Factory::finishThief(unsigned int fake_id){
 }
 
 void Factory::closeFactory(){
+    pthread_mutex_lock(&factory_lock);
     is_factory_open = false;
+    pthread_mutex_unlock(&factory_lock);
 }
 
 void Factory::openFactory(){
+    pthread_mutex_lock(&factory_lock);
     is_factory_open = true;
     pthread_cond_broadcast(&factory_open_condition);
     factoryFreeSignal();
+    pthread_mutex_unlock(&factory_lock);
 }
 
 void Factory::closeReturningService(){
+    pthread_mutex_lock(&returning_service_lock);
     is_returning_open = false;
+    pthread_mutex_unlock(&returning_service_lock);
 }
 
 void Factory::openReturningService(){
+    pthread_mutex_lock(&returning_service_lock);
     is_returning_open = true;
     pthread_cond_broadcast(&returning_open_condition);
+    pthread_mutex_unlock(&returning_service_lock);
 }
 
 std::list<std::pair<Product, int>> Factory::listStolenProducts(){

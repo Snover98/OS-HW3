@@ -22,23 +22,15 @@ private:
     pthread_mutex_t factory_lock;
     pthread_mutex_t stolen_lock;
     pthread_mutex_t thieves_counter_lock;
+    pthread_mutex_t returning_service_lock;
 
     //condition vars for the different thread types, used by the factory lock
     pthread_cond_t returning_open_condition;
     pthread_cond_t factory_open_condition;
     pthread_cond_t companies_condition;
 
-    //condition vars for the different thread types, used by the factory lock
-//    pthread_cond_t thieves_map_condition;
-//    pthread_cond_t production_map_condition;
-//    pthread_cond_t companies_map_condition;
-//    pthread_cond_t simples_map_condition;
-
     //counters for thread types that need them
     int thieves_counter;
-    int companies_counter;
-//    int waiting_thieves_counter;
-//    int waiting_companies_counter;
 
     //flag that is true when the returning service is open
     bool is_returning_open;
