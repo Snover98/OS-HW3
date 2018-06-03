@@ -38,8 +38,6 @@ private:
     //flag that is true when the factory is open
     bool is_factory_open;
 
-    //calls the correct condition vars when map is free
-//    void mapFreeSignal();
     //calls the correct condition vars when factory is free
     void factoryFreeSignal();
     //takes the num_products oldest products from available_products and returns them as a list (same order)
