@@ -1,11 +1,19 @@
 #include "Factory.h"
 
-typedef struct{
+typedef struct wrapper_struct{
     Factory* factory;
     int num_products;
     Product* products;
     int min_value;
     unsigned int fake_id;
+
+    wrapper_struct(Factory* factory, int num_products, Product* products, int min_value = 0, unsigned int fake_id = 0):
+            factory(factory), num_products(num_products), products(products), min_value(min_value), fake_id(fake_id){}
+    wrapper_struct(Factory* factory, int num_products = 0, int min_value = 0, unsigned int fake_id = 0):
+            factory(factory), num_products(num_products), products(NULL), min_value(min_value), fake_id(fake_id){}
+    wrapper_struct(Factory* factory, int num_products, unsigned int fake_id):
+            factory(factory), num_products(num_products), products(NULL), min_value(0), fake_id(fake_id){}
+
 } wrapper_struct;
 
 void *prodWrapper(void* s_struct);
@@ -57,7 +65,7 @@ void Factory::startProduction(int num_products, Product* products,unsigned int i
     pthread_t& new_thread = threads_map[id];
 
     //make wrapper struct
-    wrapper_struct s = {.factory = this, .products = products, .num_products = num_products};
+    wrapper_struct s = wrapper_struct(this, num_products, products);
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, prodWrapper , &s);
@@ -102,7 +110,7 @@ void Factory::startSimpleBuyer(unsigned int id){
     pthread_t &simple_thread = threads_map[id];
 
     //make wrapper struct
-    wrapper_struct s = {.factory = this};
+    wrapper_struct s = wrapper_struct(this);
 
     //create new thread using wrapper functions
     pthread_create(&simple_thread, NULL, simpleWrapper , &s);
@@ -170,7 +178,7 @@ void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id)
     pthread_t &new_thread = threads_map[id];
 
     //make wrapper struct
-    wrapper_struct s = {.factory = this, .min_value = min_value, .num_products = num_products};
+    wrapper_struct s = wrapper_struct(this, num_products, min_value);
 
     //create new thread using wrapper functions
     pthread_create(&new_thread, NULL, companyWrapper , &s);
@@ -278,7 +286,7 @@ void Factory::startThief(int num_products,unsigned int fake_id){
     pthread_t &new_thread = threads_map[fake_id];
 
     //make wrapper struct
-    wrapper_struct s = {.factory = this, .fake_id = fake_id, .num_products = num_products};
+    wrapper_struct s = wrapper_struct(this, num_products, fake_id);
 
     //update companies counter
     pthread_mutex_lock(&thieves_counter_lock);
