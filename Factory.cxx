@@ -160,7 +160,7 @@ int Factory::tryBuyOne(){
 
 int Factory::finishSimpleBuyer(unsigned int id){
     //@TODO maybe we should use threads_map->at(id) instead so we'll find errors easier
-    pthread_t &simple_thread = (*threads_map)[id];
+    pthread_t simple_thread = (*threads_map)[id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
     int* buy_result_address = NULL;
