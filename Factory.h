@@ -1,7 +1,7 @@
 #ifndef FACTORY_H_
 #define FACTORY_H_
 
-#define USING_ERROR_CHECK 0
+#define USING_ERROR_CHECK false
 
 #define INIT_ERROR_CHECK_MUTEX(mutex_lock) do{\
     pthread_mutexattr_t attr;\
