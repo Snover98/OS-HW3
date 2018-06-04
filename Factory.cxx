@@ -25,7 +25,7 @@ class isAboveMinValueFunctor{
     int min_value;
 public:
     isAboveMinValueFunctor(int min_value) : min_value(min_value){}
-    bool isAboveMinValue(Product& prod) { return (prod.getValue() >= min_value); }
+    bool operator()(Product& prod) { return (prod.getValue() >= min_value); }
 };
 
 
@@ -198,7 +198,7 @@ void *companyWrapper(void* s_struct){
 
     //remove all products that should not be returned from the list
     isAboveMinValueFunctor pred = isAboveMinValueFunctor(s->min_value);
-    bought_products.remove_if(pred.isAboveMinValue);
+    bought_products.remove_if(pred);
     //save the number of products we will return, that will be our return value
     *num_returned = static_cast<int>(bought_products.size());
 
