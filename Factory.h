@@ -1,6 +1,14 @@
 #ifndef FACTORY_H_
 #define FACTORY_H_
 
+#define INIT_ERROR_CHECK_MUTEX(mutex_lock) do{\
+pthread_mutexattr_t attr;\
+pthread_mutexattr_init(&attr);\
+pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);\
+pthread_mutex_init(&mutex_lock, &attr);\
+\
+}while(0)
+
 #include <pthread.h>
 #include <list>
 #include <unordered_map>
