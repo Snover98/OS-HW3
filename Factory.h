@@ -17,7 +17,7 @@
     } else{\
         pthread_mutex_init(&mutex_lock, NULL);\
     }\
-}
+}while(0)
 
 #include <pthread.h>
 #include <list>
