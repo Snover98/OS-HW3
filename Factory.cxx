@@ -23,11 +23,15 @@ public:
 
 Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0){
     //init mutex lock
-    //@TODO maybe should not be NULL
-    pthread_mutex_init(&factory_lock, NULL);
-    pthread_mutex_init(&stolen_lock, NULL);
-    pthread_mutex_init(&thieves_counter_lock, NULL);
-    pthread_mutex_init(&returning_service_lock, NULL);
+    INIT_MUTEX_LOCK(factory_lock);
+    INIT_MUTEX_LOCK(stolen_lock);
+    INIT_MUTEX_LOCK(thieves_counter_lock);
+    INIT_MUTEX_LOCK(returning_service_lock);
+
+//    pthread_mutex_init(&factory_lock, NULL);
+//    pthread_mutex_init(&stolen_lock, NULL);
+//    pthread_mutex_init(&thieves_counter_lock, NULL);
+//    pthread_mutex_init(&returning_service_lock, NULL);
 
     //init condition vars
     pthread_cond_init(&returning_open_condition, NULL);
