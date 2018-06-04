@@ -29,7 +29,9 @@ public:
 };
 
 
-Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0){
+Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0),
+                     threads_map(new std::unordered_map<unsigned int, pthread_t>),
+                     available_products(new std::list<Product>), thefts(new std::list<std::pair<Product, int>>){
     //init mutex lock
     INIT_MUTEX_LOCK(factory_lock);
     INIT_MUTEX_LOCK(stolen_lock);
@@ -58,11 +60,16 @@ Factory::~Factory(){
     pthread_cond_destroy(&returning_open_condition);
     pthread_cond_destroy(&factory_open_condition);
     pthread_cond_destroy(&companies_condition);
+
+    //delete lists and map
+    delete threads_map;
+    delete available_products;
+    delete thefts;
 }
 
 void Factory::startProduction(int num_products, Product* products,unsigned int id){
     //insert the new thread to the map;
-    pthread_t& new_thread = threads_map[id];
+    pthread_t& new_thread = (*threads_map)[id];
 
     //make wrapper struct
     wrapper_struct s = wrapper_struct(this, num_products, products);
@@ -84,7 +91,7 @@ void Factory::produce(int num_products, Product* products){
 
     //add all products to factory
     for(int i=0; i<num_products; i++){
-        available_products.push_back(products[i]);
+        available_products->push_back(products[i]);
     }
 
     //signal the next thread that it can take the lock
@@ -96,10 +103,10 @@ void Factory::produce(int num_products, Product* products){
 
 void Factory::finishProduction(unsigned int id){
     //save thread id
-    pthread_t prod_thread = threads_map[id];
+    pthread_t prod_thread = (*threads_map)[id];
 
     //remove it from the map
-    threads_map.erase(id);
+    threads_map->erase(id);
 
     //join the thread
     pthread_join(prod_thread, NULL);
@@ -107,7 +114,7 @@ void Factory::finishProduction(unsigned int id){
 
 void Factory::startSimpleBuyer(unsigned int id){
     //insert the new thread to the map;
-    pthread_t &simple_thread = threads_map[id];
+    pthread_t &simple_thread = (*threads_map)[id];
 
     //make wrapper struct
     wrapper_struct s = wrapper_struct(this);
@@ -130,10 +137,10 @@ int Factory::tryBuyOne(){
     Product bought = Product(-1, -1);
 
     if(pthread_mutex_trylock(&factory_lock) == 0){
-        if(!available_products.empty() && is_factory_open) {
+        if(!available_products->empty() && is_factory_open) {
             //buy and remove the oldest product
-            bought = available_products.front();
-            available_products.pop_front();
+            bought = available_products->front();
+            available_products->pop_front();
         }
 
         //signal the next thread that it can take the lock
@@ -147,14 +154,14 @@ int Factory::tryBuyOne(){
 }
 
 int Factory::finishSimpleBuyer(unsigned int id){
-    //@TODO maybe we should use threads_map.at(id) instead so we'll find errors easier
-    pthread_t &simple_thread = threads_map[id];
+    //@TODO maybe we should use threads_map->at(id) instead so we'll find errors easier
+    pthread_t &simple_thread = (*threads_map)[id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
     int buy_result;
 
     //remove it from the map
-    threads_map.erase(id);
+    threads_map->erase(id);
 
     //join the thread
     pthread_join(simple_thread, (void**)&buy_result);
@@ -164,7 +171,7 @@ int Factory::finishSimpleBuyer(unsigned int id){
 
 void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id){
     //insert the new thread to the map;
-    pthread_t &new_thread = threads_map[id];
+    pthread_t &new_thread = (*threads_map)[id];
 
     //make wrapper struct
     wrapper_struct s = wrapper_struct(this, num_products, min_value);
@@ -200,7 +207,7 @@ std::list<Product> Factory::buyProducts(int num_products){
     //lock the factory
     pthread_mutex_lock(&factory_lock);
     //wait until there are enough products and no thieves are around
-    while(available_products.size() < num_products || thieves_counter > 0 || !is_factory_open){
+    while(available_products->size() < num_products || thieves_counter > 0 || !is_factory_open){
         pthread_cond_wait(&companies_condition, &factory_lock);
     }
 
@@ -239,7 +246,7 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
     }
 
     //return the products
-    available_products.splice(available_products.end(), products);
+    available_products->splice(available_products->end(), products);
 
     //signal that the factory is unlocked
     factoryFreeSignal();
@@ -250,13 +257,13 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
 
 int Factory::finishCompanyBuyer(unsigned int id){
     //save the thread
-    pthread_t company_thread = threads_map[id];
+    pthread_t company_thread = (*threads_map)[id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
     int num_returned = 0;
 
     //remove it from the map
-    threads_map.erase(id);
+    threads_map->erase(id);
 
     //join the thread
     pthread_join(company_thread, (void**)&num_returned);
@@ -266,7 +273,7 @@ int Factory::finishCompanyBuyer(unsigned int id){
 
 void Factory::startThief(int num_products,unsigned int fake_id){
     //make new thread in the map
-    pthread_t &new_thread = threads_map[fake_id];
+    pthread_t &new_thread = (*threads_map)[fake_id];
 
     //make wrapper struct
     wrapper_struct s = wrapper_struct(this, num_products, fake_id);
@@ -304,7 +311,7 @@ int Factory::stealProducts(int num_products,unsigned int fake_id){
 
 
     //calculate how many products will be stolen
-    int num_stolen = std::min(num_products, static_cast<int>(available_products.size()));
+    int num_stolen = std::min(num_products, static_cast<int>(available_products->size()));
     //steal the products
     std::list<Product> stolen = takeOldestProducts(num_stolen);
 
@@ -321,7 +328,7 @@ int Factory::stealProducts(int num_products,unsigned int fake_id){
 
     //report the thefts
     for (auto& product : stolen){
-        thefts.emplace_back(product, static_cast<int>(fake_id));
+        thefts->emplace_back(product, static_cast<int>(fake_id));
     }
 
     //unlock reported thefts' lock
@@ -332,13 +339,13 @@ int Factory::stealProducts(int num_products,unsigned int fake_id){
 
 int Factory::finishThief(unsigned int fake_id){
     //save the thread
-    pthread_t thief_thread = threads_map[fake_id];
+    pthread_t thief_thread = (*threads_map)[fake_id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
     int num_stolen = 0;
 
     //remove it from the map
-    threads_map.erase(fake_id);
+    threads_map->erase(fake_id);
 
     //join the thread
     pthread_join(thief_thread, (void**)&num_stolen);
@@ -378,7 +385,7 @@ std::list<std::pair<Product, int>> Factory::listStolenProducts(){
     pthread_mutex_lock(&stolen_lock);
 
     //copy the thefts' list
-    std::list<std::pair<Product, int>> thefts_copy = thefts;
+    std::list<std::pair<Product, int>> thefts_copy = *thefts;
 
     //unlock the reported thefts' lock
     pthread_mutex_unlock(&stolen_lock);
@@ -392,7 +399,7 @@ std::list<Product> Factory::listAvailableProducts(){
     pthread_mutex_lock(&factory_lock);
 
     //copy the available products list
-    std::list<Product> available_products_copy = available_products;
+    std::list<Product> available_products_copy = *available_products;
 
     //unlock the reported thefts' lock
     pthread_mutex_unlock(&factory_lock);
@@ -416,11 +423,11 @@ std::list<Product> Factory::takeOldestProducts(int num_products){
     std::list<Product> new_list;
 
     //create an iterator pointing to the last product we want to take
-    auto last_to_take = available_products.begin();
+    auto last_to_take = available_products->begin();
     std::advance(last_to_take, num_products-1);
 
     //take all of the elements from the beginning of available_products to the num_products element
-    new_list.splice(new_list.begin(), available_products, available_products.begin(), last_to_take);
+    new_list.splice(new_list.begin(), *available_products, available_products->begin(), last_to_take);
 
     return new_list;
 }

@@ -27,14 +27,14 @@
 class Factory{
 private:
     //map of threads by id
-    std::unordered_map<unsigned int, pthread_t> threads_map;
+    std::unordered_map<unsigned int, pthread_t>* threads_map;
 
     //list of all available products from oldest produced to newest
-    std::list<Product> available_products;
+    std::list<Product>* available_products;
 
     /*list of all the filed thefts in the order they happened, each element in the list is a pair of
     stolen Product and the fake_id of the thief who stole it.*/
-    std::list<std::pair<Product, int>> thefts;
+    std::list<std::pair<Product, int>>* thefts;
 
     //lock for the factory
     pthread_mutex_t factory_lock;
