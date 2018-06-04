@@ -1,13 +1,23 @@
 #ifndef FACTORY_H_
 #define FACTORY_H_
 
+#define USING_ERROR_CHECK 0
+
 #define INIT_ERROR_CHECK_MUTEX(mutex_lock) do{\
-pthread_mutexattr_t attr;\
-pthread_mutexattr_init(&attr);\
-pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);\
-pthread_mutex_init(&mutex_lock, &attr);\
+    pthread_mutexattr_t attr;\
+    pthread_mutexattr_init(&attr);\
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);\
+    pthread_mutex_init(&mutex_lock, &attr);\
 \
 }while(0)
+
+#define INIT_MUTEX_LOCK(mutex_lock) do{\
+    if(USING_ERROR_CHECK){\
+        INIT_ERROR_CHECK_MUTEX(mutex_lock);\
+    } else{\
+        pthread_mutex_init(&mutex_lock, NULL);\
+    }\
+}
 
 #include <pthread.h>
 #include <list>
