@@ -1,6 +1,6 @@
 #include "Factory.h"
 
-typedef struct wrapper_struct{
+struct wrapper_struct{
     Factory* factory;
     int num_products;
     Product* products;
@@ -14,7 +14,7 @@ typedef struct wrapper_struct{
     wrapper_struct(Factory* factory, int num_products, unsigned int fake_id):
             factory(factory), num_products(num_products), products(NULL), min_value(0), fake_id(fake_id){}
 
-} wrapper_struct;
+};
 
 void *prodWrapper(void* s_struct);
 void *simpleWrapper(void* s_struct);
@@ -121,14 +121,8 @@ void *simpleWrapper(void* s_struct){
     //cast wrapper to correct struct
     wrapper_struct* s;
     s = static_cast<wrapper_struct*>(s_struct);
-    //create pointer to return value (allocate with new)
-    int* retval;
-    retval = new int;
-
-    //call tryBuyOne
-    *retval = s->factory->tryBuyOne();
     //return buy result
-    pthread_exit((void*)retval);
+    pthread_exit((void*)s->factory->tryBuyOne());
 }
 
 int Factory::tryBuyOne(){
@@ -157,18 +151,13 @@ int Factory::finishSimpleBuyer(unsigned int id){
     pthread_t &simple_thread = threads_map[id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
-    int* buy_result_address = NULL;
     int buy_result;
 
     //remove it from the map
     threads_map.erase(id);
 
-    //join the thread and save the result pointer in buy_result_address
-    pthread_join(simple_thread, (void**)&buy_result_address);
-    //copy the result to a local variable
-    buy_result = *buy_result_address;
-    //free the memory we allocated for the result
-    delete buy_result_address;
+    //join the thread
+    pthread_join(simple_thread, (void**)&buy_result);
 
     return buy_result;
 }
@@ -190,8 +179,7 @@ void *companyWrapper(void* s_struct){
     s = static_cast<wrapper_struct*>(s_struct);
 
     //create pointer to return value (allocate with new)
-    int* num_returned;
-    num_returned = new int;
+    int num_returned;
 
     //buy products
     std::list<Product> bought_products = s->factory->buyProducts(s->num_products);
@@ -200,7 +188,7 @@ void *companyWrapper(void* s_struct){
     isAboveMinValueFunctor pred = isAboveMinValueFunctor(s->min_value);
     bought_products.remove_if(pred);
     //save the number of products we will return, that will be our return value
-    *num_returned = static_cast<int>(bought_products.size());
+    num_returned = static_cast<int>(bought_products.size());
 
     //return the products (id parameter is deprecated and can be passed any value)
     s->factory->returnProducts(bought_products, 0);
@@ -265,18 +253,13 @@ int Factory::finishCompanyBuyer(unsigned int id){
     pthread_t company_thread = threads_map[id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
-    int* num_returned_address = NULL;
     int num_returned = 0;
 
     //remove it from the map
     threads_map.erase(id);
 
-    //join the thread and save the result pointer in num_returned_address
-    pthread_join(company_thread, (void**)&num_returned_address);
-    //copy the result to a local variable
-    num_returned = *num_returned_address;
-    //free the memory we allocated for the result
-    delete num_returned_address;
+    //join the thread
+    pthread_join(company_thread, (void**)&num_returned);
 
     return num_returned;
 }
@@ -301,15 +284,9 @@ void *thiefWrapper(void* s_struct){
     //cast wrapper to correct struct
     wrapper_struct* s;
     s = static_cast<wrapper_struct*>(s_struct);
-    //create pointer to return value (allocate with new)
-    int* retval;
-    retval = new int;
-
-    //call stealProducts
-    *retval = s->factory->stealProducts(s->num_products, s->fake_id);
 
     //return the theft value
-    pthread_exit((void*)retval);
+    pthread_exit((void*)s->factory->stealProducts(s->num_products, s->fake_id));
 }
 
 int Factory::stealProducts(int num_products,unsigned int fake_id){
@@ -358,18 +335,13 @@ int Factory::finishThief(unsigned int fake_id){
     pthread_t thief_thread = threads_map[fake_id];
 
     //create pointer to result address and variable to copy to result to before freeing the memory
-    int* num_stolen_address = NULL;
     int num_stolen = 0;
 
     //remove it from the map
     threads_map.erase(fake_id);
 
-    //join the thread and save the result pointer in buy_result_address
-    pthread_join(thief_thread, (void**)&num_stolen_address);
-    //copy the result to a local variable
-    num_stolen = *num_stolen_address;
-    //free the memory we allocated for the result
-    delete num_stolen_address;
+    //join the thread
+    pthread_join(thief_thread, (void**)&num_stolen);
 
     return num_stolen;
 }
