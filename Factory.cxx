@@ -14,6 +14,11 @@ struct wrapper_struct{
     wrapper_struct(Factory* factory, int num_products, unsigned int fake_id):
             factory(factory), num_products(num_products), products(NULL), min_value(0), fake_id(fake_id){}
 
+    ~wrapper_struct(){
+        factory = NULL;
+        products = NULL;
+    }
+
 };
 
 void *prodWrapper(void* s_struct);
@@ -72,16 +77,17 @@ void Factory::startProduction(int num_products, Product* products,unsigned int i
     pthread_t& new_thread = (*threads_map)[id];
 
     //make wrapper struct
-    wrapper_struct s = wrapper_struct(this, num_products, products);
+    wrapper_struct* s = new wrapper_struct(this, num_products, products);
 
     //create new thread using wrapper functions
-    pthread_create(&new_thread, NULL, prodWrapper , &s);
+    pthread_create(&new_thread, NULL, prodWrapper , s);
 }
 
 void *prodWrapper(void* s_struct){
-    wrapper_struct* s;
-    s = static_cast<wrapper_struct*>(s_struct);
-    s->factory->produce(s->num_products, s->products);
+    wrapper_struct s = *static_cast<wrapper_struct*>(s_struct);
+    delete static_cast<wrapper_struct*>(s_struct);
+
+    s.factory->produce(s.num_products, s.products);
     pthread_exit(NULL);
 }
 
@@ -117,21 +123,21 @@ void Factory::startSimpleBuyer(unsigned int id){
     pthread_t &simple_thread = (*threads_map)[id];
 
     //make wrapper struct
-    wrapper_struct s = wrapper_struct(this);
+    wrapper_struct* s = new wrapper_struct(this);
 
     //create new thread using wrapper functions
-    pthread_create(&simple_thread, NULL, simpleWrapper , &s);
+    pthread_create(&simple_thread, NULL, simpleWrapper , s);
 }
 
 //Wrapper for correct usage of pthread_create
 void *simpleWrapper(void* s_struct){
     //cast wrapper to correct struct
-    wrapper_struct* s;
-    s = static_cast<wrapper_struct*>(s_struct);
+    wrapper_struct s = *static_cast<wrapper_struct*>(s_struct);
+    delete static_cast<wrapper_struct*>(s_struct);
     //create pointer to return value (allocate with new)
     int* retval;
     //call try tryBuyOne
-    retval = new int(s->factory->tryBuyOne());
+    retval = new int(s.factory->tryBuyOne());
     //return buy result
     pthread_exit((void*)retval);
 
@@ -184,30 +190,30 @@ void Factory::startCompanyBuyer(int num_products, int min_value,unsigned int id)
     pthread_t &new_thread = (*threads_map)[id];
 
     //make wrapper struct
-    wrapper_struct s = wrapper_struct(this, num_products, min_value);
+    wrapper_struct* s = new wrapper_struct(this, num_products, min_value);
 
     //create new thread using wrapper functions
-    pthread_create(&new_thread, NULL, companyWrapper , &s);
+    pthread_create(&new_thread, NULL, companyWrapper , s);
 }
 
 void *companyWrapper(void* s_struct){
     //cast wrapper to correct struct
-    wrapper_struct* s;
-    s = static_cast<wrapper_struct*>(s_struct);
+    wrapper_struct s = *static_cast<wrapper_struct*>(s_struct);
+    delete static_cast<wrapper_struct*>(s_struct);
 
     int* num_returned;
 
     //buy products
-    std::list<Product> bought_products = s->factory->buyProducts(s->num_products);
+    std::list<Product> bought_products = s.factory->buyProducts(s.num_products);
 
     //remove all products that should not be returned from the list
-    isAboveMinValueFunctor pred = isAboveMinValueFunctor(s->min_value);
+    isAboveMinValueFunctor pred = isAboveMinValueFunctor(s.min_value);
     bought_products.remove_if(pred);
     //save the number of products we will return, that will be our return value
     num_returned = new int(static_cast<int>(bought_products.size()));
 
     //return the products (id parameter is deprecated and can be passed any value)
-    s->factory->returnProducts(bought_products, 0);
+    s.factory->returnProducts(bought_products, 0);
 
     pthread_exit((void*)num_returned);
 }
@@ -290,7 +296,7 @@ void Factory::startThief(int num_products,unsigned int fake_id){
     pthread_t &new_thread = (*threads_map)[fake_id];
 
     //make wrapper struct
-    wrapper_struct s = wrapper_struct(this, num_products, fake_id);
+    wrapper_struct* s = new wrapper_struct(this, num_products, fake_id);
 
     //update companies counter
     pthread_mutex_lock(&thieves_counter_lock);
@@ -298,19 +304,19 @@ void Factory::startThief(int num_products,unsigned int fake_id){
     pthread_mutex_unlock(&thieves_counter_lock);
 
     //create new thread using wrapper functions
-    pthread_create(&new_thread, NULL, thiefWrapper , &s);
+    pthread_create(&new_thread, NULL, thiefWrapper , s);
 }
 
 void *thiefWrapper(void* s_struct){
     //cast wrapper to correct struct
-    wrapper_struct* s;
-    s = static_cast<wrapper_struct*>(s_struct);
+    wrapper_struct s = *static_cast<wrapper_struct*>(s_struct);
+    delete static_cast<wrapper_struct*>(s_struct);
 
     //create pointer to return value (allocate with new)
     int* retval;
 
     //call stealProducts
-    retval = new int(s->factory->stealProducts(s->num_products, s->fake_id));
+    retval = new int(s.factory->stealProducts(s.num_products, s.fake_id));
 
     //return the theft value
     pthread_exit((void*)retval);
@@ -449,7 +455,7 @@ std::list<Product> Factory::takeOldestProducts(int num_products){
 
     //create an iterator pointing to the last product we want to take
     auto last_to_take = available_products->begin();
-    std::advance(last_to_take, num_products-1);
+    std::advance(last_to_take, num_products);
 
     //take all of the elements from the beginning of available_products to the num_products element
     new_list.splice(new_list.begin(), *available_products, available_products->begin(), last_to_take);
