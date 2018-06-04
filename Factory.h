@@ -9,7 +9,7 @@
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);\
     pthread_mutex_init(&mutex_lock, &attr);\
 \
-}while(0)
+}while(false)
 
 #define INIT_MUTEX_LOCK(mutex_lock) do{\
     if(USING_ERROR_CHECK){\
@@ -17,7 +17,7 @@
     } else{\
         pthread_mutex_init(&mutex_lock, NULL);\
     }\
-}while(0)
+}while(false)
 
 #include <pthread.h>
 #include <list>
