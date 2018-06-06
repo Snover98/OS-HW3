@@ -34,7 +34,8 @@ public:
 };
 
 
-Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0),
+Factory::Factory() : is_returning_open(true), is_factory_open(true), thieves_counter(0), waiting_for_return_counter(0),
+                     waiting_thieves_counter(0), waiting_companies_counter(0),
                      threads_map(new std::unordered_map<unsigned int, pthread_t>),
                      available_products(new std::list<Product>), thefts(new std::list<std::pair<Product, int>>){
     //init mutex lock
@@ -140,7 +141,6 @@ void *simpleWrapper(void* s_struct){
     retval = new int(s.factory->tryBuyOne());
     //return buy result
     pthread_exit((void*)retval);
-
 }
 
 int Factory::tryBuyOne(){
@@ -223,7 +223,11 @@ std::list<Product> Factory::buyProducts(int num_products){
     pthread_mutex_lock(&factory_lock);
     //wait until there are enough products and no thieves are around
     while(available_products->size() < num_products || thieves_counter > 0 || !is_factory_open){
+        //this company is now waiting
+        ++waiting_companies_counter;
         pthread_cond_wait(&companies_condition, &factory_lock);
+        //this company is no longer waiting
+        --waiting_companies_counter;
     }
 
     //take the num_products oldest products
@@ -248,7 +252,11 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
     pthread_mutex_lock(&returning_service_lock);
     //if the returning service is closed, wait until it opens
     if(!is_returning_open){
+        //this company is waiting, so increase the counter
+        ++waiting_for_return_counter;
         pthread_cond_wait(&returning_open_condition, &returning_service_lock);
+        //this company is no longer waiting, so decrease the counter
+        --waiting_for_return_counter;
     }
     //unlock the returning service
     pthread_mutex_unlock(&returning_service_lock);
@@ -257,7 +265,11 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
     pthread_mutex_lock(&factory_lock);
     //wait until no thieves are around
     while(thieves_counter > 0){
+        //this company is now waiting
+        ++waiting_companies_counter;
         pthread_cond_wait(&companies_condition, &factory_lock);
+        //this company is no longer waiting
+        --waiting_companies_counter;
     }
 
     //return the products
@@ -330,11 +342,15 @@ int Factory::stealProducts(int num_products,unsigned int fake_id){
     pthread_mutex_lock(&stolen_lock);
 
     if(!is_factory_open){
+        //thief is now waiting
+        ++waiting_thieves_counter;
+        //wait until the factory opens
         pthread_mutex_unlock(&stolen_lock);
         pthread_cond_wait(&factory_open_condition, &factory_lock);
         pthread_mutex_lock(&stolen_lock);
+        //thief is no longer waiting
+        --waiting_thieves_counter;
     }
-
 
     //calculate how many products will be stolen
     int num_stolen = std::min(num_products, static_cast<int>(available_products->size()));
@@ -393,7 +409,9 @@ void Factory::closeFactory(){
 void Factory::openFactory(){
     pthread_mutex_lock(&factory_lock);
     is_factory_open = true;
-    pthread_cond_broadcast(&factory_open_condition);
+    if(waiting_thieves_counter > 0){
+        pthread_cond_broadcast(&factory_open_condition);
+    }
     factoryFreeSignal();
     pthread_mutex_unlock(&factory_lock);
 }
@@ -407,7 +425,9 @@ void Factory::closeReturningService(){
 void Factory::openReturningService(){
     pthread_mutex_lock(&returning_service_lock);
     is_returning_open = true;
-    pthread_cond_broadcast(&returning_open_condition);
+    if(waiting_for_return_counter > 0){
+        pthread_cond_broadcast(&returning_open_condition);
+    }
     pthread_mutex_unlock(&returning_service_lock);
 }
 
@@ -440,12 +460,17 @@ std::list<Product> Factory::listAvailableProducts(){
 }
 
 void Factory::factoryFreeSignal(){
-    //TODO: when reading thieves_counter (or any var that can be changed by another thread) maybe we should lock first
-    if(thieves_counter == 0){
+    //lock thieves_counter_lock so we can look at thieves_counter,
+    //waiting_companies_counter is under factory_lock which is always locked before calling this function
+    pthread_mutex_lock(&thieves_counter_lock);
+    //if there are now thieves waiting for the factory lock, and there are companies waiting for it
+    //and the factory is open broadcast to them
+    if(is_factory_open && thieves_counter == 0 && waiting_companies_counter > 0){
         pthread_cond_broadcast(&companies_condition);
     }
+    pthread_mutex_unlock(&thieves_counter_lock);
 }
-
+//factory is always locked when this function is called
 std::list<Product> Factory::takeOldestProducts(int num_products){
     if(num_products == 0){
         return std::list<Product>();

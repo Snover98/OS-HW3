@@ -29,11 +29,12 @@ private:
     //map of threads by id
     std::unordered_map<unsigned int, pthread_t>* threads_map;
 
-    //list of all available products from oldest produced to newest
+    //list of all available products from oldest produced to newest - under factory_lock
     std::list<Product>* available_products;
 
     /*list of all the filed thefts in the order they happened, each element in the list is a pair of
     stolen Product and the fake_id of the thief who stole it.*/
+    //under stolen_lock
     std::list<std::pair<Product, int>>* thefts;
 
     //lock for the factory
@@ -47,13 +48,22 @@ private:
     pthread_cond_t factory_open_condition;
     pthread_cond_t companies_condition;
 
-    //counters for thread types that need them
+    //counters for thread types that need them - under thieves_counter_lock
     int thieves_counter;
 
-    //flag that is true when the returning service is open
+    //counter for the number of thieves waiting for the factory to open - under factory_lock
+    int waiting_thieves_counter;
+
+    //counter for the number of companies waiting for the factory lock (while buying or returning) - under factory_lock
+    int waiting_companies_counter;
+
+    //counter for companies waiting for the returning service - under returning_service_lock
+    int waiting_for_return_counter;
+
+    //flag that is true when the returning service is open - under returning_service_lock
     bool is_returning_open;
 
-    //flag that is true when the factory is open
+    //flag that is true when the factory is open - under factory_lock
     bool is_factory_open;
 
     //calls the correct condition vars when factory is free
