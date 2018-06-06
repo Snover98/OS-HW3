@@ -6,6 +6,6 @@ set(CMAKE_CXX_STANDARD 11)
 set(SOURCE_FILES
         Factory.cxx
         Factory.h
-        Product.h)
+        Product.h test_din.cpp)
 
 add_executable(OS_HW3 ${SOURCE_FILES})
