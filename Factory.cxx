@@ -221,14 +221,18 @@ void *companyWrapper(void* s_struct){
 std::list<Product> Factory::buyProducts(int num_products){
     //lock the factory
     pthread_mutex_lock(&factory_lock);
+    pthread_mutex_lock(&thieves_counter_lock);
     //wait until there are enough products and no thieves are around
     while(available_products->size() < num_products || thieves_counter > 0 || !is_factory_open){
         //this company is now waiting
         ++waiting_companies_counter;
+        pthread_mutex_unlock(&thieves_counter_lock);
         pthread_cond_wait(&companies_condition, &factory_lock);
+        pthread_mutex_lock(&thieves_counter_lock);
         //this company is no longer waiting
         --waiting_companies_counter;
     }
+    pthread_mutex_unlock(&thieves_counter_lock);
 
     //take the num_products oldest products
     std::list<Product> bought_products = takeOldestProducts(num_products);
@@ -263,14 +267,18 @@ void Factory::returnProducts(std::list<Product> products,unsigned int id){
 
     //lock the factory
     pthread_mutex_lock(&factory_lock);
+    pthread_mutex_lock(&thieves_counter_lock);
     //wait until no thieves are around
     while(thieves_counter > 0){
         //this company is now waiting
         ++waiting_companies_counter;
+        pthread_mutex_unlock(&thieves_counter_lock);
         pthread_cond_wait(&companies_condition, &factory_lock);
+        pthread_mutex_lock(&thieves_counter_lock);
         //this company is no longer waiting
         --waiting_companies_counter;
     }
+    pthread_mutex_unlock(&thieves_counter_lock);
 
     //return the products
     available_products->splice(available_products->end(), products);
