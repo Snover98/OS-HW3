@@ -409,34 +409,42 @@ int Factory::finishThief(unsigned int fake_id){
 }
 
 void Factory::closeFactory(){
-    pthread_mutex_lock(&factory_lock);
-    is_factory_open = false;
-    pthread_mutex_unlock(&factory_lock);
+    if(is_factory_open){
+        pthread_mutex_lock(&factory_lock);
+        is_factory_open = false;
+        pthread_mutex_unlock(&factory_lock);
+    }
 }
 
 void Factory::openFactory(){
-    pthread_mutex_lock(&factory_lock);
-    is_factory_open = true;
-    if(waiting_thieves_counter > 0){
-        pthread_cond_broadcast(&factory_open_condition);
+    if(!is_factory_open){
+        pthread_mutex_lock(&factory_lock);
+        is_factory_open = true;
+        if(waiting_thieves_counter > 0){
+            pthread_cond_broadcast(&factory_open_condition);
+        }
+        factoryFreeSignal();
+        pthread_mutex_unlock(&factory_lock);
     }
-    factoryFreeSignal();
-    pthread_mutex_unlock(&factory_lock);
 }
 
 void Factory::closeReturningService(){
-    pthread_mutex_lock(&returning_service_lock);
-    is_returning_open = false;
-    pthread_mutex_unlock(&returning_service_lock);
+    if(is_returning_open){
+        pthread_mutex_lock(&returning_service_lock);
+        is_returning_open = false;
+        pthread_mutex_unlock(&returning_service_lock);
+    }
 }
 
 void Factory::openReturningService(){
-    pthread_mutex_lock(&returning_service_lock);
-    is_returning_open = true;
-    if(waiting_for_return_counter > 0){
-        pthread_cond_broadcast(&returning_open_condition);
+    if(!is_returning_open){
+        pthread_mutex_lock(&returning_service_lock);
+        is_returning_open = true;
+        if(waiting_for_return_counter > 0){
+            pthread_cond_broadcast(&returning_open_condition);
+        }
+        pthread_mutex_unlock(&returning_service_lock);
     }
-    pthread_mutex_unlock(&returning_service_lock);
 }
 
 std::list<std::pair<Product, int>> Factory::listStolenProducts(){
